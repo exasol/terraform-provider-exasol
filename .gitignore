@@ -1,0 +1,75 @@
+# .gitignore for a Go Terraform provider project
+
+# Built binaries
+/bin/
+/build/
+/dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Terraform provider build artifacts (common naming patterns)
+terraform-provider-*
+*terraform-provider-*
+*.zip
+
+# Go build / test
+*.test
+*.out
+coverage.out
+/pkg/
+/vendor/
+
+# Go workspace files
+*.exe
+*.test
+*.prof
+
+# Module cache (should not be committed)
+Gopkg.lock
+Gopkg.toml
+
+# Terraform state, plans, local override files and crash logs
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*.tfplan
+crash.log
+
+# Sensitive or environment files
+.env
+.env.local
+.secret
+*.pem
+*.key
+
+# IDEs and editors
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+*.swp
+*~
+.project
+.metadata/
+*.launch
+.settings/
+
+# macOS / Windows
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Generated docs / files
+doc.go
+docs/
+generated/
