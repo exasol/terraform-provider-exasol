@@ -150,6 +150,23 @@ func (r *GrantResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
+	// Check if this is just a schema rename (only object_name changed for SCHEMA object type)
+	if strings.EqualFold(plan.PrivilegeType.ValueString(), "OBJECT") &&
+		strings.EqualFold(state.PrivilegeType.ValueString(), "OBJECT") &&
+		strings.EqualFold(plan.ObjectType.ValueString(), "SCHEMA") &&
+		strings.EqualFold(state.ObjectType.ValueString(), "SCHEMA") &&
+		plan.GranteeName.ValueString() == state.GranteeName.ValueString() &&
+		plan.Privilege.ValueString() == state.Privilege.ValueString() &&
+		plan.WithAdminOption.ValueBool() == state.WithAdminOption.ValueBool() &&
+		plan.ObjectName.ValueString() != state.ObjectName.ValueString() {
+
+		// This is just a schema rename - database handles it automatically
+		// Just update the Terraform state without any database operations
+		plan.ID = types.StringValue(idForGrant(plan))
+		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+		return
+	}
+
 	oldID := idForGrant(state)
 	newID := idForGrant(plan)
 
@@ -168,6 +185,7 @@ func (r *GrantResource) Update(ctx context.Context, req resource.UpdateRequest, 
 			resp.Diagnostics.AddError("Invalid grant", err.Error())
 			return
 		}
+		tflog.Info(ctx, "Executing GRANT", map[string]any{"sql": sqlGrant})
 		if _, err := r.db.ExecContext(ctx, sqlGrant); err != nil {
 			resp.Diagnostics.AddError("GRANT failed", err.Error())
 			return
