@@ -80,3 +80,27 @@ jobs:
             echo "Documentation is out of date. Please run 'make docs' and commit the changes."
             exit 1
           fi
+  
+  release:
+    name: Build & Publish provider binary
+    needs: [test, lint]        # only after tests/lint succeed
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'   # only when merging/pushing to main
+    permissions:
+      contents: write          # needed to create GitHub Releases
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0       # goreleaser needs tags and full history
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      # Install goreleaser
+      - name: Install goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean --skip-validate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

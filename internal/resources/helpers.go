@@ -3,6 +3,8 @@ package resources
 import (
 	"fmt"
 	"strings"
+
+	_ "github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs"
 )
 
 func qualify(obj string) string {
