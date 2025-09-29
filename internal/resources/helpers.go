@@ -1,16 +1,9 @@
 package resources
 
 import (
-	"context"
-	"database/sql"
 	"fmt"
 	"strings"
 )
-
-func exec(ctx context.Context, db *sql.DB, sqlText string, args ...any) error {
-	_, err := db.ExecContext(ctx, sqlText, args...)
-	return err
-}
 
 func qualify(obj string) string {
 	// Allow user to pass SCHEMA.TABLE or just SCHEMA.
