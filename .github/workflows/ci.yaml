@@ -61,7 +61,6 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           version: latest
-  
   release:
     name: Build & Publish provider binary
     needs: [test, lint]        # only after tests/lint succeed
@@ -76,6 +75,27 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
+      
+      - name: Extract version from main.go and tag
+        id: tag
+        run: |
+          set -e
+          # grep the quoted value of var version = "x.y.z"
+          ver=$(grep -Po 'var version\s*=\s*"\K[0-9]+\.[0-9]+\.[0-9]+' main.go)
+          echo "Version from main.go: $ver"
+
+          git fetch --tags
+
+          if git rev-parse "v$ver" >/dev/null 2>&1; then
+            echo "Tag v$ver already exists – will reuse"
+          else
+            echo "Creating tag v$ver"
+            git config user.name  "github-actions"
+            git config user.email "github-actions@github.com"
+            git tag -f "v$ver"
+            git push origin "v$ver"
+          fi
+          echo "tag=v$ver" >> $GITHUB_OUTPUT
 
       # Install goreleaser
       - name: Install goreleaser
