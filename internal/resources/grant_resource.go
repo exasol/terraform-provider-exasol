@@ -150,18 +150,15 @@ func (r *GrantResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	// Check if this is just a schema rename (only object_name changed for SCHEMA object type)
-	if strings.EqualFold(plan.PrivilegeType.ValueString(), "OBJECT") &&
-		strings.EqualFold(state.PrivilegeType.ValueString(), "OBJECT") &&
-		strings.EqualFold(plan.ObjectType.ValueString(), "SCHEMA") &&
-		strings.EqualFold(state.ObjectType.ValueString(), "SCHEMA") &&
-		plan.GranteeName.ValueString() == state.GranteeName.ValueString() &&
-		plan.Privilege.ValueString() == state.Privilege.ValueString() &&
-		plan.WithAdminOption.ValueBool() == state.WithAdminOption.ValueBool() &&
-		plan.ObjectName.ValueString() != state.ObjectName.ValueString() {
+	// Check if this is a schema object rename - Exasol handles grants automatically
+	if isSchemaObjectRename(plan, state) {
+		tflog.Info(ctx, "Schema rename detected - skipping grant update as database handles it automatically",
+			map[string]any{
+				"old_object_name": state.ObjectName.ValueString(),
+				"new_object_name": plan.ObjectName.ValueString(),
+			})
 
-		// This is just a schema rename - database handles it automatically
-		// Just update the Terraform state without any database operations
+		// Update only the Terraform state
 		plan.ID = types.StringValue(idForGrant(plan))
 		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 		return
@@ -171,21 +168,27 @@ func (r *GrantResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	newID := idForGrant(plan)
 
 	if oldID != newID {
+		// First revoke the old grant
 		sqlRevoke, err := buildRevokeSQL(state)
 		if err != nil {
-			resp.Diagnostics.AddError("Invalid revoke", err.Error())
+			resp.Diagnostics.AddError("Invalid revoke statement", err.Error())
 			return
 		}
+
+		tflog.Info(ctx, "Revoking old grant", map[string]any{"sql": sqlRevoke})
 		if _, err := r.db.ExecContext(ctx, sqlRevoke); err != nil {
 			resp.Diagnostics.AddError("REVOKE failed", err.Error())
 			return
 		}
+
+		// Then create the new grant
 		sqlGrant, err := buildGrantSQL(plan)
 		if err != nil {
-			resp.Diagnostics.AddError("Invalid grant", err.Error())
+			resp.Diagnostics.AddError("Invalid grant statement", err.Error())
 			return
 		}
-		tflog.Info(ctx, "Executing GRANT", map[string]any{"sql": sqlGrant})
+
+		tflog.Info(ctx, "Creating new grant", map[string]any{"sql": sqlGrant})
 		if _, err := r.db.ExecContext(ctx, sqlGrant); err != nil {
 			resp.Diagnostics.AddError("GRANT failed", err.Error())
 			return
@@ -194,6 +197,24 @@ func (r *GrantResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	plan.ID = types.StringValue(newID)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// isSchemaObjectRename checks if this update is just a schema rename where
+// only the object_name changed for a SCHEMA object type grant
+func isSchemaObjectRename(plan, state grantModel) bool {
+	// Must be OBJECT privilege on SCHEMA
+	if !strings.EqualFold(plan.PrivilegeType.ValueString(), "OBJECT") ||
+		!strings.EqualFold(state.PrivilegeType.ValueString(), "OBJECT") ||
+		!strings.EqualFold(plan.ObjectType.ValueString(), "SCHEMA") ||
+		!strings.EqualFold(state.ObjectType.ValueString(), "SCHEMA") {
+		return false
+	}
+
+	// Only object_name should have changed
+	return plan.GranteeName.ValueString() == state.GranteeName.ValueString() &&
+		plan.Privilege.ValueString() == state.Privilege.ValueString() &&
+		plan.WithAdminOption.ValueBool() == state.WithAdminOption.ValueBool() &&
+		plan.ObjectName.ValueString() != state.ObjectName.ValueString()
 }
 
 func (r *GrantResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
