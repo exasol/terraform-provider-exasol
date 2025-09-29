@@ -93,7 +93,7 @@ jobs:
             git config user.name  "github-actions"
             git config user.email "github-actions@github.com"
             git tag -f "v$ver"
-            git push origin "v$ver"
+            git push -f origin "v$ver"
           fi
           echo "tag=v$ver" >> $GITHUB_OUTPUT
 
