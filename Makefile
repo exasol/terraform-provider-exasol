@@ -41,12 +41,6 @@ clean: ## Clean build artifacts
 	@rm -rf bin/ dist/
 	@go clean
 
-docs: ## Generate documentation
-	@echo "Generating documentation..."
-	@tfplugindocs generate \
-		--provider-name exasol/bi-terraform-provider-exasol \
-		--provider-alias exasol
-
 # Install the provider binary into the local Terraform plugin cache
 install-local: build ## Install provider locally for testing
 	@os=$$(go env GOOS) ; arch=$$(go env GOARCH) ; \

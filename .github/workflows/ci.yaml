@@ -61,25 +61,6 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           version: latest
-
-  docs:
-    name: Documentation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
-        with:
-          go-version: ${{ env.GO_VERSION }}
-      - name: Generate docs
-        run: |
-          go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@latest
-          make docs
-      - name: Check for changes
-        run: |
-          if [[ `git status --porcelain` ]]; then
-            echo "Documentation is out of date. Please run 'make docs' and commit the changes."
-            exit 1
-          fi
   
   release:
     name: Build & Publish provider binary
