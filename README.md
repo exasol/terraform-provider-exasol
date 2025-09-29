@@ -18,7 +18,7 @@ A Terraform provider for managing Exasol database resources.
 terraform {
   required_providers {
     exasol = {
-      source  = "your-org/exasol"
+      source  = "exasol/bi-terraform-provider-exasol"
       version = "~> 0.1.0"
     }
   }

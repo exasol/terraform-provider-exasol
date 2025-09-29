@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     exasol = {
-      source  = "local/exasol"
+      source  = "exasol/bi-terraform-provider-exasol"
       version = "0.1.0"
     }
   }

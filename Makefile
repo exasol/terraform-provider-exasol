@@ -2,7 +2,7 @@
 
 # Variables
 BINARY_NAME=terraform-provider-exasol
-PROVIDER_NAME=exasol
+PROVIDER_NAME=exasol/bi-terraform-provider-exasol
 VERSION?=0.1.0
 
 help: ## Show this help message

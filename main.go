@@ -20,7 +20,7 @@ func main() {
 
 	opts := providerserver.ServeOpts{
 		// MUST match Terraform’s fully-qualified address
-		Address: "registry.terraform.io/local/exasol",
+		Address: "exasol/bi-terraform-provider-exasol",
 		Debug:   debug,
 	}
 
