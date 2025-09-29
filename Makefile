@@ -43,7 +43,7 @@ clean: ## Clean build artifacts
 
 docs: ## Generate documentation
 	@echo "Generating documentation..."
-	@tfplugindocs --provider-name $(PROVIDER_NAME)
+	@tfplugindocs generate --provider-name $(PROVIDER_NAME)
 
 # Install the provider binary into the local Terraform plugin cache
 install-local: build ## Install provider locally for testing
