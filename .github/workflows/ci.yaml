@@ -80,21 +80,17 @@ jobs:
         id: tag
         run: |
           set -e
-          # grep the quoted value of var version = "x.y.z"
           ver=$(grep -Po 'var version\s*=\s*"\K[0-9]+\.[0-9]+\.[0-9]+' main.go)
           echo "Version from main.go: $ver"
 
           git fetch --tags
 
-          if git rev-parse "v$ver" >/dev/null 2>&1; then
-            echo "Tag v$ver already exists – will reuse"
-          else
-            echo "Creating tag v$ver"
-            git config user.name  "github-actions"
-            git config user.email "github-actions@github.com"
-            git tag -f "v$ver"
-            git push -f origin "v$ver"
-          fi
+          echo "Tagging current commit as v$ver (force updating if it already exists)"
+          git config user.name  "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag -f "v$ver"
+          git push -f origin "v$ver"
+
           echo "tag=v$ver" >> $GITHUB_OUTPUT
 
       # Install goreleaser
