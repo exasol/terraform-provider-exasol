@@ -15,14 +15,18 @@ builds:
     goos:
       - linux
       - darwin
+      - windows
+      - freebsd
     goarch:
       - amd64
       - arm64
-    # explicitly list only the combos we want:
+      - '386'
     ignore:
       - goos: darwin
-        goarch: amd64
-      - goos: linux
+        goarch: '386'
+      - goos: windows
+        goarch: arm64
+      - goos: freebsd
         goarch: arm64
     binary: '{{ .ProjectName }}_v{{ .Version }}'
 
@@ -35,11 +39,34 @@ checksum:
   algorithm: sha256
 
 release:
-  draft: true
+  draft: false
+  prerelease: auto
+  name_template: "v{{ .Version }}"
+  header: |
+    ## Exasol Terraform Provider {{ .Version }}
+
+    For detailed release notes, see [RELEASE_NOTES_v{{ .Version }}.md](https://github.com/exasol/bi-terraform-provider-exasol/blob/main/RELEASE_NOTES_v{{ .Version }}.md)
 
 changelog:
+  use: github
   sort: asc
+  groups:
+    - title: 'Features'
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: 'Bug Fixes'
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: 'Security'
+      regexp: '^.*?sec(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: 'Documentation'
+      regexp: '^.*?docs(\([[:word:]]+\))??!?:.+$'
+      order: 3
+    - title: 'Other Changes'
+      order: 999
   filters:
     exclude:
-      - '^docs:'
       - '^test:'
+      - '^chore:'
+      - '^ci:'
