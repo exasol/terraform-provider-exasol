@@ -71,7 +71,16 @@ func (r *SchemaResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	sqlStmt := fmt.Sprintf(`CREATE SCHEMA "%s"`, plan.Name.ValueString())
+	schemaName := plan.Name.ValueString()
+
+	// Validate identifier to prevent SQL injection
+	if !isValidIdentifier(schemaName) {
+		resp.Diagnostics.AddError("Invalid schema name",
+			fmt.Sprintf("Schema name %q contains invalid characters. Exasol identifiers must start with a letter and contain only letters, digits, and underscores.", schemaName))
+		return
+	}
+
+	sqlStmt := fmt.Sprintf(`CREATE SCHEMA "%s"`, schemaName)
 	tflog.Info(ctx, "Creating schema", map[string]any{"sql": sqlStmt})
 	if _, err := r.db.ExecContext(ctx, sqlStmt); err != nil {
 		resp.Diagnostics.AddError("CREATE SCHEMA failed", err.Error())
@@ -86,6 +95,10 @@ func (r *SchemaResource) Read(ctx context.Context, req resource.ReadRequest, res
 	var state schemaModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if r.db == nil {
+		resp.Diagnostics.AddError("Database not configured", "Provider did not supply a database connection.")
 		return
 	}
 
@@ -120,6 +133,18 @@ func (r *SchemaResource) Update(ctx context.Context, req resource.UpdateRequest,
 	oldName := state.ID.ValueString()
 	newName := plan.Name.ValueString()
 
+	// Validate identifiers to prevent SQL injection
+	if !isValidIdentifier(oldName) {
+		resp.Diagnostics.AddError("Invalid old schema name",
+			fmt.Sprintf("Schema name %q contains invalid characters.", oldName))
+		return
+	}
+	if !isValidIdentifier(newName) {
+		resp.Diagnostics.AddError("Invalid new schema name",
+			fmt.Sprintf("Schema name %q contains invalid characters.", newName))
+		return
+	}
+
 	if oldName != newName {
 		sqlStmt := fmt.Sprintf(`RENAME SCHEMA "%s" TO "%s"`, oldName, newName)
 		tflog.Info(ctx, "Renaming schema", map[string]any{"sql": sqlStmt})
@@ -145,7 +170,16 @@ func (r *SchemaResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 
-	sqlStmt := fmt.Sprintf(`DROP SCHEMA "%s" CASCADE`, state.ID.ValueString())
+	schemaName := state.ID.ValueString()
+
+	// Validate identifier to prevent SQL injection
+	if !isValidIdentifier(schemaName) {
+		resp.Diagnostics.AddError("Invalid schema name",
+			fmt.Sprintf("Schema name %q contains invalid characters.", schemaName))
+		return
+	}
+
+	sqlStmt := fmt.Sprintf(`DROP SCHEMA "%s" CASCADE`, schemaName)
 	tflog.Info(ctx, "Dropping schema", map[string]any{"sql": sqlStmt})
 	if _, err := r.db.ExecContext(ctx, sqlStmt); err != nil {
 		resp.Diagnostics.AddError("DROP SCHEMA failed", err.Error())

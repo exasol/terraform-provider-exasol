@@ -69,8 +69,20 @@ func (r *RoleResource) Create(ctx context.Context, req resource.CreateRequest, r
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if r.db == nil {
+		resp.Diagnostics.AddError("Database not configured", "Provider did not supply a database connection.")
+		return
+	}
 
 	upName := upper(plan.Name.ValueString())
+
+	// Validate identifier to prevent SQL injection
+	if !isValidIdentifier(upName) {
+		resp.Diagnostics.AddError("Invalid role name",
+			fmt.Sprintf("Role name %q contains invalid characters. Exasol identifiers must start with a letter and contain only letters, digits, and underscores.", plan.Name.ValueString()))
+		return
+	}
+
 	stmt := fmt.Sprintf(`CREATE ROLE "%s"`, upName)
 	tflog.Debug(ctx, "Creating role", map[string]any{"sql": stmt})
 	if _, err := r.db.ExecContext(ctx, stmt); err != nil {
@@ -89,6 +101,10 @@ func (r *RoleResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	var state roleModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if r.db == nil {
+		resp.Diagnostics.AddError("Database not configured", "Provider did not supply a database connection.")
 		return
 	}
 
@@ -116,9 +132,25 @@ func (r *RoleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if r.db == nil {
+		resp.Diagnostics.AddError("Database not configured", "Provider did not supply a database connection.")
+		return
+	}
 
 	upNew := upper(plan.Name.ValueString())
 	upOld := upper(prior.ID.ValueString()) // ID always upper-case
+
+	// Validate identifiers to prevent SQL injection
+	if !isValidIdentifier(upOld) {
+		resp.Diagnostics.AddError("Invalid old role name",
+			fmt.Sprintf("Role name %q contains invalid characters.", prior.ID.ValueString()))
+		return
+	}
+	if !isValidIdentifier(upNew) {
+		resp.Diagnostics.AddError("Invalid new role name",
+			fmt.Sprintf("Role name %q contains invalid characters.", plan.Name.ValueString()))
+		return
+	}
 
 	if upNew != upOld {
 		stmt := fmt.Sprintf(`RENAME ROLE "%s" TO "%s"`, upOld, upNew)
@@ -140,8 +172,21 @@ func (r *RoleResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if r.db == nil {
+		resp.Diagnostics.AddError("Database not configured", "Provider did not supply a database connection.")
+		return
+	}
 
-	stmt := fmt.Sprintf(`DROP ROLE "%s"`, upper(state.ID.ValueString()))
+	upName := upper(state.ID.ValueString())
+
+	// Validate identifier to prevent SQL injection
+	if !isValidIdentifier(upName) {
+		resp.Diagnostics.AddError("Invalid role name",
+			fmt.Sprintf("Role name %q contains invalid characters.", state.ID.ValueString()))
+		return
+	}
+
+	stmt := fmt.Sprintf(`DROP ROLE "%s"`, upName)
 	tflog.Debug(ctx, "Dropping role", map[string]any{"sql": stmt})
 	if _, err := r.db.ExecContext(ctx, stmt); err != nil {
 		resp.Diagnostics.AddError("Error dropping role", err.Error())

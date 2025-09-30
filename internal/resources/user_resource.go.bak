@@ -93,20 +93,12 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	upName := strings.ToUpper(plan.Name.ValueString())
-
-	// Validate identifier to prevent SQL injection
-	if !isValidIdentifier(upName) {
-		resp.Diagnostics.AddError("Invalid user name",
-			fmt.Sprintf("User name %q contains invalid characters. Exasol identifiers must start with a letter and contain only letters, digits, and underscores.", plan.Name.ValueString()))
-		return
-	}
-
 	sqlStmt, err := buildCreateUserSQL(plan)
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid user configuration", err.Error())
 		return
 	}
-	tflog.Info(ctx, "Creating user", map[string]any{"sql": sanitizeLogSQL(sqlStmt)})
+	tflog.Info(ctx, "Creating user", map[string]any{"sql": sqlStmt})
 	if _, err := r.db.ExecContext(ctx, sqlStmt); err != nil {
 		resp.Diagnostics.AddError("CREATE USER failed", err.Error())
 		return
@@ -167,18 +159,6 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	upOld := strings.ToUpper(state.Name.ValueString())
 	upNew := strings.ToUpper(plan.Name.ValueString())
 
-	// Validate identifiers to prevent SQL injection
-	if !isValidIdentifier(upOld) {
-		resp.Diagnostics.AddError("Invalid old user name",
-			fmt.Sprintf("User name %q contains invalid characters.", state.Name.ValueString()))
-		return
-	}
-	if !isValidIdentifier(upNew) {
-		resp.Diagnostics.AddError("Invalid new user name",
-			fmt.Sprintf("User name %q contains invalid characters.", plan.Name.ValueString()))
-		return
-	}
-
 	if upOld != upNew {
 		stmt := fmt.Sprintf(`RENAME USER "%s" TO "%s"`, upOld, upNew)
 		tflog.Info(ctx, "Renaming user", map[string]any{"sql": stmt})
@@ -198,7 +178,7 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 			resp.Diagnostics.AddError("Invalid alter user config", err.Error())
 			return
 		}
-		tflog.Info(ctx, "Altering user", map[string]any{"sql": sanitizeLogSQL(alter)})
+		tflog.Info(ctx, "Altering user", map[string]any{"sql": alter})
 		if _, err := r.db.ExecContext(ctx, alter); err != nil {
 			resp.Diagnostics.AddError("ALTER USER failed", err.Error())
 			return
@@ -221,16 +201,7 @@ func (r *UserResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 		return
 	}
 
-	upName := strings.ToUpper(state.ID.ValueString())
-
-	// Validate identifier to prevent SQL injection
-	if !isValidIdentifier(upName) {
-		resp.Diagnostics.AddError("Invalid user name",
-			fmt.Sprintf("User name %q contains invalid characters.", state.ID.ValueString()))
-		return
-	}
-
-	stmt := fmt.Sprintf(`DROP USER "%s"`, upName)
+	stmt := fmt.Sprintf(`DROP USER "%s"`, strings.ToUpper(state.ID.ValueString()))
 	tflog.Info(ctx, "Dropping user", map[string]any{"sql": stmt})
 	if _, err := r.db.ExecContext(ctx, stmt); err != nil {
 		resp.Diagnostics.AddError("DROP USER failed", err.Error())
@@ -246,34 +217,22 @@ func (r *UserResource) ImportState(ctx context.Context, req resource.ImportState
 
 func buildCreateUserSQL(m userModel) (string, error) {
 	upName := strings.ToUpper(m.Name.ValueString())
-
-	// Validate identifier
-	if !isValidIdentifier(upName) {
-		return "", fmt.Errorf("invalid user name %q: must start with a letter and contain only letters, digits, and underscores", m.Name.ValueString())
-	}
-
 	switch strings.ToUpper(m.AuthType.ValueString()) {
 	case "PASSWORD":
 		if m.Password.IsNull() {
 			return "", fmt.Errorf("password must be set when auth_type is PASSWORD")
 		}
-		// Escape the password (which is used as an identifier literal in Exasol)
-		escapedPassword := escapeIdentifierLiteral(m.Password.ValueString())
-		return fmt.Sprintf(`CREATE USER "%s" IDENTIFIED BY "%s"`, upName, escapedPassword), nil
+		return fmt.Sprintf(`CREATE USER "%s" IDENTIFIED BY "%s"`, upName, m.Password.ValueString()), nil
 	case "LDAP":
 		if m.LDAPDN.IsNull() {
 			return "", fmt.Errorf("ldap_dn must be set when auth_type is LDAP")
 		}
-		// Escape the LDAP DN (string literal)
-		escapedDN := escapeStringLiteral(m.LDAPDN.ValueString())
-		return fmt.Sprintf(`CREATE USER "%s" IDENTIFIED AT LDAP AS '%s'`, upName, escapedDN), nil
+		return fmt.Sprintf(`CREATE USER "%s" IDENTIFIED AT LDAP AS '%s'`, upName, m.LDAPDN.ValueString()), nil
 	case "OPENID":
 		if m.OpenIDSubject.IsNull() {
 			return "", fmt.Errorf("openid_subject must be set when auth_type is OPENID")
 		}
-		// Escape the OpenID subject (string literal)
-		escapedSubject := escapeStringLiteral(m.OpenIDSubject.ValueString())
-		return fmt.Sprintf(`CREATE USER "%s" IDENTIFIED BY OPENID SUBJECT '%s'`, upName, escapedSubject), nil
+		return fmt.Sprintf(`CREATE USER "%s" IDENTIFIED BY OPENID SUBJECT '%s'`, upName, m.OpenIDSubject.ValueString()), nil
 	default:
 		return "", fmt.Errorf("unsupported auth_type %q", m.AuthType.ValueString())
 	}
@@ -281,34 +240,22 @@ func buildCreateUserSQL(m userModel) (string, error) {
 
 func buildAlterUserSQL(m userModel) (string, error) {
 	upName := strings.ToUpper(m.Name.ValueString())
-
-	// Validate identifier
-	if !isValidIdentifier(upName) {
-		return "", fmt.Errorf("invalid user name %q: must start with a letter and contain only letters, digits, and underscores", m.Name.ValueString())
-	}
-
 	switch strings.ToUpper(m.AuthType.ValueString()) {
 	case "PASSWORD":
 		if m.Password.IsNull() {
 			return "", fmt.Errorf("password must be set when auth_type is PASSWORD")
 		}
-		// Escape the password (which is used as an identifier literal in Exasol)
-		escapedPassword := escapeIdentifierLiteral(m.Password.ValueString())
-		return fmt.Sprintf(`ALTER USER "%s" IDENTIFIED BY "%s"`, upName, escapedPassword), nil
+		return fmt.Sprintf(`ALTER USER "%s" IDENTIFIED BY "%s"`, upName, m.Password.ValueString()), nil
 	case "LDAP":
 		if m.LDAPDN.IsNull() {
 			return "", fmt.Errorf("ldap_dn must be set when auth_type is LDAP")
 		}
-		// Escape the LDAP DN (string literal)
-		escapedDN := escapeStringLiteral(m.LDAPDN.ValueString())
-		return fmt.Sprintf(`ALTER USER "%s" IDENTIFIED AT LDAP AS '%s'`, upName, escapedDN), nil
+		return fmt.Sprintf(`ALTER USER "%s" IDENTIFIED AT LDAP AS '%s'`, upName, m.LDAPDN.ValueString()), nil
 	case "OPENID":
 		if m.OpenIDSubject.IsNull() {
 			return "", fmt.Errorf("openid_subject must be set when auth_type is OPENID")
 		}
-		// Escape the OpenID subject (string literal)
-		escapedSubject := escapeStringLiteral(m.OpenIDSubject.ValueString())
-		return fmt.Sprintf(`ALTER USER "%s" IDENTIFIED BY OPENID SUBJECT '%s'`, upName, escapedSubject), nil
+		return fmt.Sprintf(`ALTER USER "%s" IDENTIFIED BY OPENID SUBJECT '%s'`, upName, m.OpenIDSubject.ValueString()), nil
 	default:
 		return "", fmt.Errorf("unsupported auth_type %q", m.AuthType.ValueString())
 	}

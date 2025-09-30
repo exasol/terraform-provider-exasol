@@ -31,35 +31,38 @@ func (r *GrantResource) Metadata(_ context.Context, req resource.MetadataRequest
 
 func (r *GrantResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Generic Exasol GRANT resource supporting SYSTEM and OBJECT privileges.",
+		Description: "Generic Exasol GRANT resource supporting SYSTEM privileges, OBJECT privileges, and ROLE grants.\n\n" +
+			"For role grants, set privilege_type to either SYSTEM or OBJECT with object_type='ROLE'. " +
+			"When granting a role, the privilege field should contain the role name, and for OBJECT type, " +
+			"the object_name should also contain the role name.",
 		Attributes: map[string]schema.Attribute{
 			"grantee_name": schema.StringAttribute{
 				Required:    true,
-				Description: "User or role name that receives the privilege.",
+				Description: "User or role name that receives the privilege or role.",
 			},
 			"privilege_type": schema.StringAttribute{
 				Required:    true,
-				Description: `Either "SYSTEM" or "OBJECT".`,
+				Description: `Either "SYSTEM" or "OBJECT". For role grants, use either type with object_type="ROLE".`,
 			},
 			"privilege": schema.StringAttribute{
 				Required:    true,
-				Description: "Privilege name (e.g. USAGE, SELECT, CREATE ANY TABLE...).",
+				Description: "Privilege name (e.g. USAGE, SELECT, CREATE ANY TABLE...) or role name for role grants.",
 			},
 			"object_type": schema.StringAttribute{
 				Optional:    true,
-				Description: "Object type for OBJECT privileges (e.g. SCHEMA, TABLE, VIEW).",
+				Description: `Object type for OBJECT privileges (e.g. SCHEMA, TABLE, VIEW). Use "ROLE" for role grants.`,
 			},
 			"object_name": schema.StringAttribute{
 				Optional:    true,
-				Description: "Qualified object name for OBJECT privileges (e.g. MYSCHEMA.MYTABLE or MYSCHEMA).",
+				Description: "Qualified object name for OBJECT privileges (e.g. MYSCHEMA.MYTABLE or MYSCHEMA). For role grants with OBJECT privilege_type, this should contain the role name.",
 			},
 			"with_admin_option": schema.BoolAttribute{
 				Optional:    true,
-				Description: "Applies to SYSTEM grants where supported.",
+				Description: "Grants the privilege/role with ADMIN OPTION. Applies to SYSTEM privileges and role grants.",
 			},
 			"id": schema.StringAttribute{
 				Computed:    true,
-				Description: "Synthetic ID representing the granted privilege.",
+				Description: "Synthetic ID representing the granted privilege or role.",
 			},
 		},
 	}
@@ -273,7 +276,14 @@ func idForGrant(m grantModel) string {
 }
 
 func buildGrantSQL(m grantModel) (string, error) {
-	grantee := fmt.Sprintf(`"%s"`, strings.ToUpper(m.GranteeName.ValueString()))
+	granteeName := strings.ToUpper(m.GranteeName.ValueString())
+
+	// Validate grantee name
+	if !isValidIdentifier(granteeName) {
+		return "", fmt.Errorf("invalid grantee name %q: must start with a letter and contain only letters, digits, and underscores", m.GranteeName.ValueString())
+	}
+
+	grantee := fmt.Sprintf(`"%s"`, granteeName)
 	priv := strings.ToUpper(m.Privilege.ValueString())
 
 	switch strings.ToUpper(m.PrivilegeType.ValueString()) {
@@ -296,7 +306,14 @@ func buildGrantSQL(m grantModel) (string, error) {
 }
 
 func buildRevokeSQL(m grantModel) (string, error) {
-	grantee := fmt.Sprintf(`"%s"`, strings.ToUpper(m.GranteeName.ValueString()))
+	granteeName := strings.ToUpper(m.GranteeName.ValueString())
+
+	// Validate grantee name
+	if !isValidIdentifier(granteeName) {
+		return "", fmt.Errorf("invalid grantee name %q: must start with a letter and contain only letters, digits, and underscores", m.GranteeName.ValueString())
+	}
+
+	grantee := fmt.Sprintf(`"%s"`, granteeName)
 	priv := strings.ToUpper(m.Privilege.ValueString())
 
 	switch strings.ToUpper(m.PrivilegeType.ValueString()) {
@@ -315,6 +332,124 @@ func buildRevokeSQL(m grantModel) (string, error) {
 }
 
 func checkGrantExists(ctx context.Context, db *sql.DB, m grantModel) (bool, error) {
-	// TODO: implement with EXA_DBA_SYS_PRIVS / EXA_DBA_OBJ_PRIVS as appropriate.
-	return true, nil
+	granteeName := strings.ToUpper(m.GranteeName.ValueString())
+	privilege := strings.ToUpper(m.Privilege.ValueString())
+
+	switch strings.ToUpper(m.PrivilegeType.ValueString()) {
+	case "SYSTEM":
+		// Check if this is actually a ROLE grant (when object_type = "ROLE")
+		if !m.ObjectType.IsNull() && strings.EqualFold(m.ObjectType.ValueString(), "ROLE") {
+			// This is a role grant, not a system privilege
+			// Query EXA_DBA_ROLE_PRIVS for role assignments
+			query := `SELECT 1 FROM EXA_DBA_ROLE_PRIVS WHERE GRANTEE = ? AND GRANTED_ROLE = ?`
+			var dummy int
+			err := db.QueryRowContext(ctx, query, granteeName, privilege).Scan(&dummy)
+			if err == sql.ErrNoRows {
+				return false, nil
+			}
+			if err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+
+		// Query EXA_DBA_SYS_PRIVS for system privileges
+		query := `SELECT 1 FROM EXA_DBA_SYS_PRIVS WHERE GRANTEE = ? AND PRIVILEGE = ?`
+		var dummy int
+		err := db.QueryRowContext(ctx, query, granteeName, privilege).Scan(&dummy)
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		return true, nil
+
+	case "OBJECT":
+		if m.ObjectType.IsNull() || m.ObjectName.IsNull() {
+			return false, fmt.Errorf("object_type and object_name are required for OBJECT privileges")
+		}
+
+		objType := strings.ToUpper(m.ObjectType.ValueString())
+		objName := strings.ToUpper(m.ObjectName.ValueString())
+
+		// Special handling for ROLE type - this is actually a role grant
+		if strings.EqualFold(objType, "ROLE") {
+			// Query EXA_DBA_ROLE_PRIVS for role assignments
+			// In this case, object_name contains the role name
+			query := `SELECT 1 FROM EXA_DBA_ROLE_PRIVS WHERE GRANTEE = ? AND GRANTED_ROLE = ?`
+			var dummy int
+			err := db.QueryRowContext(ctx, query, granteeName, objName).Scan(&dummy)
+			if err == sql.ErrNoRows {
+				return false, nil
+			}
+			if err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+
+		// For object privileges, query EXA_DBA_OBJ_PRIVS
+		// The object name might be schema-qualified (e.g., "SCHEMA.TABLE")
+		// We need to handle both single identifiers and qualified names
+
+		tflog.Debug(ctx, "Checking object privilege existence", map[string]any{
+			"grantee":     granteeName,
+			"privilege":   privilege,
+			"object_type": objType,
+			"object_name": objName,
+		})
+
+		// Special handling for "ALL" privilege
+		// Exasol may expand "ALL" into individual privileges or store it as-is
+		// We need to check both possibilities
+		if privilege == "ALL" {
+			// First, try to find "ALL" privilege directly
+			query := `SELECT 1 FROM EXA_DBA_OBJ_PRIVS WHERE GRANTEE = ? AND PRIVILEGE = 'ALL' AND OBJECT_TYPE = ? AND OBJECT_NAME = ?`
+			var dummy int
+			err := db.QueryRowContext(ctx, query, granteeName, objType, objName).Scan(&dummy)
+			if err == nil {
+				tflog.Debug(ctx, "Object privilege 'ALL' found in EXA_DBA_OBJ_PRIVS")
+				return true, nil
+			}
+			if err != sql.ErrNoRows {
+				tflog.Error(ctx, "Error querying EXA_DBA_OBJ_PRIVS for ALL", map[string]any{"error": err.Error()})
+				return false, err
+			}
+
+			// If "ALL" is not found directly, check if any individual privileges exist
+			// This covers the case where "ALL" was expanded into individual privileges
+			countQuery := `SELECT COUNT(*) FROM EXA_DBA_OBJ_PRIVS WHERE GRANTEE = ? AND OBJECT_TYPE = ? AND OBJECT_NAME = ?`
+			var count int
+			err = db.QueryRowContext(ctx, countQuery, granteeName, objType, objName).Scan(&count)
+			if err != nil {
+				tflog.Error(ctx, "Error counting privileges in EXA_DBA_OBJ_PRIVS", map[string]any{"error": err.Error()})
+				return false, err
+			}
+			if count > 0 {
+				tflog.Debug(ctx, "Object privileges found (ALL may have been expanded)", map[string]any{"count": count})
+				return true, nil
+			}
+			tflog.Debug(ctx, "No object privileges found for grantee")
+			return false, nil
+		}
+
+		// For non-ALL privileges, query directly
+		query := `SELECT 1 FROM EXA_DBA_OBJ_PRIVS WHERE GRANTEE = ? AND PRIVILEGE = ? AND OBJECT_TYPE = ? AND OBJECT_NAME = ?`
+		var dummy int
+		err := db.QueryRowContext(ctx, query, granteeName, privilege, objType, objName).Scan(&dummy)
+		if err == sql.ErrNoRows {
+			tflog.Debug(ctx, "Object privilege not found in EXA_DBA_OBJ_PRIVS")
+			return false, nil
+		}
+		if err != nil {
+			tflog.Error(ctx, "Error querying EXA_DBA_OBJ_PRIVS", map[string]any{"error": err.Error()})
+			return false, err
+		}
+		tflog.Debug(ctx, "Object privilege found in EXA_DBA_OBJ_PRIVS")
+		return true, nil
+
+	default:
+		return false, fmt.Errorf("privilege_type must be SYSTEM or OBJECT")
+	}
 }
