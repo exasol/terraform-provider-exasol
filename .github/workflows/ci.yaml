@@ -50,7 +50,7 @@ jobs:
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v5
-        if: matrix.os == 'ubuntu-latest'
+        if: success()
 
   lint:
     name: Lint
