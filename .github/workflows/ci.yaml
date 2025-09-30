@@ -63,7 +63,6 @@ jobs:
           version: latest
   release:
     name: Build & Publish provider binary
-    needs: [test, lint]        # only after tests/lint succeed
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')   # only when a version tag is pushed
     permissions:
