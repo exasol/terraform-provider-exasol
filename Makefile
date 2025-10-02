@@ -3,7 +3,7 @@
 # Variables
 BINARY_NAME=terraform-provider-exasol
 PROVIDER_NAME=exasol/bi-terraform-provider-exasol
-VERSION?=0.1.0
+VERSION?=$(shell grep 'var version = ' main.go | sed 's/.*"\(.*\)".*/\1/')
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
