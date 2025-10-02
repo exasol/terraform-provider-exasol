@@ -22,7 +22,7 @@ func NewClient(ctx context.Context, c *ProviderConfig) (*Client, error) {
 
 	// Detect if password is a PAT token
 	if strings.HasPrefix(c.Password, "exa_pat_") {
-		config = exasol.NewConfigWithAccessToken(c.Password) // Use PAT as access token
+		config = exasol.NewConfigWithRefreshToken(c.Password) // Use PAT as refresh token
 	} else {
 		config = exasol.NewConfig(c.User, c.Password) // Use regular password
 	}
