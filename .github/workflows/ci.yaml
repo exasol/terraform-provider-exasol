@@ -15,7 +15,10 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    if: "!startsWith(github.ref, 'refs/tags/')"
+    # Only run on pushes and PRs from the same repository (not forks)
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -55,7 +58,10 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    if: "!startsWith(github.ref, 'refs/tags/')"
+    # Only run on pushes and PRs from the same repository (not forks)
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
