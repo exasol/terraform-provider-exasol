@@ -10,12 +10,13 @@ A Terraform provider for managing Exasol database resources.
 
 - **User management** - Create and manage database users with various authentication methods
 - **Role management** - Define and manage database roles
-- **Schema management** - Create and configure database schemas
+- **Schema management** - Create and configure database schemas with ownership control
 - **Connection management** - Manage external connections (S3, FTP, JDBC, etc.)
-- **Privilege management** - Three dedicated resources for clear privilege management:
+- **Privilege management** - Four dedicated resources for clear privilege management:
   - `exasol_system_privilege` - System-level privileges (CREATE SESSION, CREATE TABLE, etc.)
   - `exasol_object_privilege` - Object-level privileges (SELECT, INSERT, etc. on tables/schemas/views)
   - `exasol_role_grant` - Grant roles to users or other roles
+  - `exasol_connection_grant` - Grant connection access to users or roles
 
 ## Installation
 
@@ -26,7 +27,7 @@ terraform {
   required_providers {
     exasol = {
       source  = "registry.terraform.io/exasol/terraform-provider-exasol"
-      version = "~> 0.1"
+      version = "~> 0.1.1"
     }
   }
 }
@@ -70,6 +71,16 @@ resource "exasol_user" "example" {
   password  = "password123"
 }
 
+resource "exasol_role" "analyst" {
+  name = "ANALYST_ROLE"
+}
+
+# Schema with declarative ownership (NEW in v0.1.1)
+resource "exasol_schema" "analytics" {
+  name  = "ANALYTICS"
+  owner = exasol_role.analyst.name  # Automatically transfers ownership
+}
+
 resource "exasol_connection" "s3" {
   name     = "MY_S3_BUCKET"
   to       = "https://my-bucket.s3.us-east-1.amazonaws.com"
@@ -77,8 +88,10 @@ resource "exasol_connection" "s3" {
   password = "AWS_SECRET_KEY"
 }
 
-resource "exasol_role" "analyst" {
-  name = "ANALYST_ROLE"
+# Grant connection access (NEW in v0.1.1)
+resource "exasol_connection_grant" "analyst_s3" {
+  connection_name = exasol_connection.s3.name
+  grantee         = exasol_role.analyst.name
 }
 
 # Grant system privilege
@@ -88,11 +101,11 @@ resource "exasol_system_privilege" "create_session" {
 }
 
 # Grant multiple object privileges (can be a single privilege or list)
-resource "exasol_object_privilege" "table_access" {
+resource "exasol_object_privilege" "schema_access" {
   grantee     = exasol_role.analyst.name
-  privileges  = ["SELECT", "INSERT", "UPDATE"]  # List of privileges
-  object_type = "TABLE"
-  object_name = "MYSCHEMA.MYTABLE"
+  privileges  = ["USAGE", "SELECT"]  # List of privileges
+  object_type = "SCHEMA"
+  object_name = exasol_schema.analytics.name
 }
 
 # Grant role to user

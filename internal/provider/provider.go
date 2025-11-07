@@ -79,6 +79,7 @@ func (p *ExasolProvider) Configure(ctx context.Context, req provider.ConfigureRe
 func (p *ExasolProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		resources.NewConnectionResource,
+		resources.NewConnectionGrantResource,
 		resources.NewGrantResource, // Legacy - use specific grant resources instead
 		resources.NewObjectPrivilegeResource,
 		resources.NewRoleGrantResource,

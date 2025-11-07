@@ -38,6 +38,11 @@ func (r *SchemaResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				Required:    true,
 				Description: "Schema name to create or rename to.",
 			},
+			"owner": schema.StringAttribute{
+				Optional:    true,
+				Computed:    true,
+				Description: "Schema owner (user or role). If specified, ownership will be transferred after creation.",
+			},
 			"id": schema.StringAttribute{
 				Computed:    true,
 				Description: "Current schema name (used as Terraform ID).",
@@ -56,8 +61,9 @@ func (r *SchemaResource) Configure(_ context.Context, req resource.ConfigureRequ
 }
 
 type schemaModel struct {
-	ID   types.String `tfsdk:"id"`
-	Name types.String `tfsdk:"name"`
+	ID    types.String `tfsdk:"id"`
+	Name  types.String `tfsdk:"name"`
+	Owner types.String `tfsdk:"owner"`
 }
 
 func (r *SchemaResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -87,6 +93,22 @@ func (r *SchemaResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
+	// Transfer ownership if specified
+	if !plan.Owner.IsNull() && !plan.Owner.IsUnknown() {
+		owner := plan.Owner.ValueString()
+		if !isValidIdentifier(owner) {
+			resp.Diagnostics.AddError("Invalid owner name",
+				fmt.Sprintf("Owner name %q contains invalid characters.", owner))
+			return
+		}
+		alterStmt := fmt.Sprintf(`ALTER SCHEMA "%s" CHANGE OWNER "%s"`, schemaName, owner)
+		tflog.Info(ctx, "Transferring schema ownership", map[string]any{"sql": alterStmt})
+		if _, err := r.db.ExecContext(ctx, alterStmt); err != nil {
+			resp.Diagnostics.AddError("ALTER SCHEMA CHANGE OWNER failed", err.Error())
+			return
+		}
+	}
+
 	plan.ID = plan.Name
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -102,9 +124,9 @@ func (r *SchemaResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	var dummy int
-	query := `SELECT 1 FROM EXA_ALL_SCHEMAS WHERE SCHEMA_NAME = ?`
-	err := r.db.QueryRowContext(ctx, query, state.ID.ValueString()).Scan(&dummy)
+	var owner sql.NullString
+	query := `SELECT SCHEMA_OWNER FROM EXA_ALL_SCHEMAS WHERE SCHEMA_NAME = ?`
+	err := r.db.QueryRowContext(ctx, query, state.ID.ValueString()).Scan(&owner)
 	if err == sql.ErrNoRows {
 		resp.State.RemoveResource(ctx)
 		return
@@ -112,6 +134,13 @@ func (r *SchemaResource) Read(ctx context.Context, req resource.ReadRequest, res
 	if err != nil {
 		resp.Diagnostics.AddError("Read schema failed", err.Error())
 		return
+	}
+
+	// Update owner in state
+	if owner.Valid {
+		state.Owner = types.StringValue(owner.String)
+	} else {
+		state.Owner = types.StringNull()
 	}
 
 	// Keep user-defined case in state
@@ -151,6 +180,27 @@ func (r *SchemaResource) Update(ctx context.Context, req resource.UpdateRequest,
 		if _, err := r.db.ExecContext(ctx, sqlStmt); err != nil {
 			resp.Diagnostics.AddError("RENAME SCHEMA failed", err.Error())
 			return
+		}
+	}
+
+	// Handle ownership change
+	currentName := newName // Use new name if renamed, otherwise same as old
+	if !plan.Owner.IsNull() && !plan.Owner.IsUnknown() {
+		newOwner := plan.Owner.ValueString()
+		oldOwner := state.Owner.ValueString()
+
+		if newOwner != oldOwner {
+			if !isValidIdentifier(newOwner) {
+				resp.Diagnostics.AddError("Invalid owner name",
+					fmt.Sprintf("Owner name %q contains invalid characters.", newOwner))
+				return
+			}
+			alterStmt := fmt.Sprintf(`ALTER SCHEMA "%s" CHANGE OWNER "%s"`, currentName, newOwner)
+			tflog.Info(ctx, "Changing schema ownership", map[string]any{"sql": alterStmt})
+			if _, err := r.db.ExecContext(ctx, alterStmt); err != nil {
+				resp.Diagnostics.AddError("ALTER SCHEMA CHANGE OWNER failed", err.Error())
+				return
+			}
 		}
 	}
 
