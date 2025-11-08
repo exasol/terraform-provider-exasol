@@ -100,6 +100,13 @@ resource "exasol_system_privilege" "create_session" {
   privilege = "CREATE SESSION"
 }
 
+# Grant system privilege with admin option
+resource "exasol_system_privilege" "use_any_schema" {
+  grantee           = exasol_role.analyst.name
+  privilege         = "USE ANY SCHEMA"
+  with_admin_option = true
+}
+
 # Grant multiple object privileges (can be a single privilege or list)
 resource "exasol_object_privilege" "schema_access" {
   grantee     = exasol_role.analyst.name
@@ -112,6 +119,13 @@ resource "exasol_object_privilege" "schema_access" {
 resource "exasol_role_grant" "user_role" {
   role    = exasol_role.analyst.name
   grantee = exasol_user.example.name
+}
+
+# Grant role with admin option (allows grantee to grant role to others)
+resource "exasol_role_grant" "user_role_admin" {
+  role              = exasol_role.analyst.name
+  grantee           = exasol_user.example.name
+  with_admin_option = true
 }
 ```
 
