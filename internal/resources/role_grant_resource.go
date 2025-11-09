@@ -140,11 +140,9 @@ func (r *RoleGrantResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	// Only update with_admin_option if it was explicitly set in the configuration
-	// If it's null in the plan, keep it null to avoid phantom diffs
-	if !state.WithAdminOption.IsNull() {
-		state.WithAdminOption = types.BoolValue(adminOption == "TRUE")
-	}
+	// Always update with_admin_option from database to reflect actual state
+	// This ensures the state matches reality and prevents phantom diffs
+	state.WithAdminOption = types.BoolValue(adminOption == "TRUE" || adminOption == "1")
 	state.ID = types.StringValue(roleGrantID(state))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
