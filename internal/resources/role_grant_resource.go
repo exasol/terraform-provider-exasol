@@ -142,7 +142,8 @@ func (r *RoleGrantResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 	// Always update with_admin_option from database to reflect actual state
 	// This ensures the state matches reality and prevents phantom diffs
-	state.WithAdminOption = types.BoolValue(adminOption == "TRUE" || adminOption == "1")
+	// Handle both uppercase (SaaS: "TRUE"/"1") and lowercase (Docker: "true") variants
+	state.WithAdminOption = types.BoolValue(adminOption == "TRUE" || adminOption == "1" || adminOption == "true")
 	state.ID = types.StringValue(roleGrantID(state))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
