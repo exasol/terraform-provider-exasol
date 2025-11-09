@@ -120,9 +120,9 @@ func (r *ConnectionGrantResource) Read(ctx context.Context, req resource.ReadReq
 	connection := strings.ToUpper(state.ConnectionName.ValueString())
 	grantee := strings.ToUpper(state.Grantee.ValueString())
 
-	// Check if the grant exists in EXA_DBA_OBJ_PRIVS
-	// Connection grants are stored as object privileges with OBJECT_TYPE = 'CONNECTION'
-	query := `SELECT 1 FROM EXA_DBA_OBJ_PRIVS WHERE OBJECT_TYPE = 'CONNECTION' AND OBJECT_NAME = ? AND GRANTEE = ?`
+	// Check if the grant exists in EXA_DBA_CONNECTION_PRIVS
+	// Connection grants are tracked separately in the connection privileges view
+	query := `SELECT 1 FROM EXA_DBA_CONNECTION_PRIVS WHERE GRANTED_CONNECTION = ? AND GRANTEE = ?`
 	var dummy int
 	err := r.db.QueryRowContext(ctx, query, connection, grantee).Scan(&dummy)
 	if err == sql.ErrNoRows {
