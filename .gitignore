@@ -73,3 +73,11 @@ Thumbs.db
 doc.go
 docs/
 generated/
+
+# Python (not part of this Go project, used only for temporary tasks)
+*.py
+*.pyc
+__pycache__/
+.venv/
+venv/
+.python-version

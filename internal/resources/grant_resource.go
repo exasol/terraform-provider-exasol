@@ -221,6 +221,10 @@ func isSchemaObjectRename(plan, state grantModel) bool {
 }
 
 func (r *GrantResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// Serialize delete operations to prevent transaction collision errors
+	lockDelete()
+	defer unlockDelete()
+
 	if r.db == nil {
 		resp.Diagnostics.AddError("Database not configured", "Provider did not supply a database connection.")
 		return

@@ -167,6 +167,10 @@ func (r *RoleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 }
 
 func (r *RoleResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// Serialize delete operations to prevent transaction collision errors
+	lockDelete()
+	defer unlockDelete()
+
 	var state roleModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {

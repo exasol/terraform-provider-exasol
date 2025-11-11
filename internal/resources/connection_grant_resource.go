@@ -189,6 +189,10 @@ func (r *ConnectionGrantResource) Update(ctx context.Context, req resource.Updat
 }
 
 func (r *ConnectionGrantResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// Serialize delete operations to prevent transaction collision errors
+	lockDelete()
+	defer unlockDelete()
+
 	var state connectionGrantModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {

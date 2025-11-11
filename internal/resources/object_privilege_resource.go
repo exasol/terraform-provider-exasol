@@ -270,6 +270,10 @@ func (r *ObjectPrivilegeResource) Update(ctx context.Context, req resource.Updat
 }
 
 func (r *ObjectPrivilegeResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// Serialize delete operations to prevent transaction collision errors
+	lockDelete()
+	defer unlockDelete()
+
 	var state objectPrivilegeModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {

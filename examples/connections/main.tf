@@ -2,7 +2,7 @@ terraform {
   required_providers {
     exasol = {
       source  = "local/exasol/terraform-provider-exasol"
-      version = "0.2.0"
+      version = "~> 0.1.6"
     }
   }
 }
@@ -12,6 +12,11 @@ provider "exasol" {
   port     = 8563
   user     = var.exa_user
   password = var.exa_password
+}
+
+# Create a role to grant connection access to
+resource "exasol_role" "etl_role" {
+  name = "ETL_ROLE"
 }
 
 # Example 1: Exasol-to-Exasol connection
@@ -30,6 +35,12 @@ resource "exasol_connection" "s3_bucket" {
   password = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 }
 
+# Grant connection access to role
+resource "exasol_connection_grant" "etl_s3_access" {
+  connection_name = exasol_connection.s3_bucket.name
+  grantee         = exasol_role.etl_role.name
+}
+
 # Example 3: FTP connection
 resource "exasol_connection" "ftp_server" {
   name     = "FTP_DATA_SOURCE"
@@ -40,9 +51,9 @@ resource "exasol_connection" "ftp_server" {
 
 # Example 4: Oracle connection (with TNS connect string)
 resource "exasol_connection" "oracle_db" {
-  name = "ORACLE_PROD"
-  to   = "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=oracle.example.com)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=ORCL)))"
-  user = "oracle_user"
+  name     = "ORACLE_PROD"
+  to       = "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=oracle.example.com)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=ORCL)))"
+  user     = "oracle_user"
   password = "oracle_password"
 }
 

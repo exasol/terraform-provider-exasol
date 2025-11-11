@@ -145,6 +145,7 @@ See the [examples/](examples/) directory for complete examples of each resource 
 - `exasol_system_privilege` - Grant system-level privileges
 - `exasol_object_privilege` - Grant object-level privileges
 - `exasol_role_grant` - Grant roles to users or other roles
+- `exasol_connection_grant` - Grant connection access to users or roles
 
 ## Contributing
 
