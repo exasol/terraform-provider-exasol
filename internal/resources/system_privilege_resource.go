@@ -137,10 +137,15 @@ func (r *SystemPrivilegeResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	// Only update with_admin_option if it was explicitly set in the configuration
-	// If it's null in the plan, keep it null to avoid phantom diffs
-	if !state.WithAdminOption.IsNull() {
-		state.WithAdminOption = types.BoolValue(adminOption == "TRUE")
+	// Set with_admin_option based on database value
+	// If database has TRUE, set to true. If database has FALSE, set to null.
+	// This is because in Exasol, there's no distinction between "not specified" and "false"
+	// Both result in no admin option. This prevents drift when upgrading from old provider versions.
+	// Handle both uppercase (SaaS: "TRUE"/"1") and lowercase (Docker: "true") variants
+	if adminOption == "TRUE" || adminOption == "1" || adminOption == "true" {
+		state.WithAdminOption = types.BoolValue(true)
+	} else {
+		state.WithAdminOption = types.BoolNull()
 	}
 	state.ID = types.StringValue(systemPrivilegeID(state))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -212,6 +217,10 @@ func (r *SystemPrivilegeResource) Update(ctx context.Context, req resource.Updat
 }
 
 func (r *SystemPrivilegeResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// Serialize delete operations to prevent transaction collision errors
+	lockDelete()
+	defer unlockDelete()
+
 	var state systemPrivilegeModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {

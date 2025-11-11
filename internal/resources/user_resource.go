@@ -211,6 +211,10 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 }
 
 func (r *UserResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// Serialize delete operations to prevent transaction collision errors
+	lockDelete()
+	defer unlockDelete()
+
 	var state userModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {

@@ -140,10 +140,16 @@ func (r *RoleGrantResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	// Always update with_admin_option from database to reflect actual state
-	// This ensures the state matches reality and prevents phantom diffs
+	// Set with_admin_option based on database value
+	// If database has TRUE, set to true. If database has FALSE, set to null.
+	// This is because in Exasol, there's no distinction between "not specified" and "false"
+	// Both result in no admin option. This prevents drift when upgrading from old provider versions.
 	// Handle both uppercase (SaaS: "TRUE"/"1") and lowercase (Docker: "true") variants
-	state.WithAdminOption = types.BoolValue(adminOption == "TRUE" || adminOption == "1" || adminOption == "true")
+	if adminOption == "TRUE" || adminOption == "1" || adminOption == "true" {
+		state.WithAdminOption = types.BoolValue(true)
+	} else {
+		state.WithAdminOption = types.BoolNull()
+	}
 	state.ID = types.StringValue(roleGrantID(state))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -214,6 +220,10 @@ func (r *RoleGrantResource) Update(ctx context.Context, req resource.UpdateReque
 }
 
 func (r *RoleGrantResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// Serialize delete operations to prevent transaction collision errors
+	lockDelete()
+	defer unlockDelete()
+
 	var state roleGrantModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {

@@ -2,7 +2,7 @@ terraform {
   required_providers {
     exasol = {
       source  = "local/exasol/terraform-provider-exasol"
-      version = "0.2.0"
+      version = "~> 0.1.6"
     }
   }
 }
@@ -33,23 +33,27 @@ resource "exasol_user" "analyst_user" {
 # ROLE GRANTS - Granting a role to a user
 # =============================================================================
 
-# Method 1: Role grant using SYSTEM privilege_type with object_type="ROLE"
-resource "exasol_grant" "role_to_user_method1" {
-  grantee_name      = exasol_user.analyst_user.name
-  privilege_type    = "SYSTEM"
-  privilege         = exasol_role.analyst.name
-  object_type       = "ROLE"
-  with_admin_option = false
+# Grant role to user
+resource "exasol_role_grant" "analyst_to_user" {
+  role    = exasol_role.analyst.name
+  grantee = exasol_user.analyst_user.name
 }
 
-# Method 2: Role grant using OBJECT privilege_type with object_type="ROLE"
-# (Alternative syntax - both work the same way)
-resource "exasol_grant" "role_to_user_method2" {
-  grantee_name   = "ANOTHER_USER"
-  privilege_type = "OBJECT"
-  privilege      = exasol_role.analyst.name
-  object_type    = "ROLE"
-  object_name    = exasol_role.analyst.name
+# Grant role to user with admin option (allows user to grant role to others)
+resource "exasol_role_grant" "analyst_to_user_admin" {
+  role              = exasol_role.analyst.name
+  grantee           = "ANOTHER_USER"
+  with_admin_option = true
+}
+
+# Grant role to another role (role hierarchy)
+resource "exasol_role" "senior_analyst" {
+  name = "SENIOR_ANALYST_ROLE"
+}
+
+resource "exasol_role_grant" "analyst_to_senior" {
+  role    = exasol_role.analyst.name
+  grantee = exasol_role.senior_analyst.name
 }
 
 # =============================================================================
@@ -57,26 +61,33 @@ resource "exasol_grant" "role_to_user_method2" {
 # =============================================================================
 
 # Grant system privilege to a role
-resource "exasol_grant" "create_session" {
-  grantee_name      = exasol_role.analyst.name
-  privilege_type    = "SYSTEM"
-  privilege         = "CREATE SESSION"
-  with_admin_option = false
+resource "exasol_system_privilege" "create_session" {
+  grantee   = exasol_role.analyst.name
+  privilege = "CREATE SESSION"
 }
 
 # Grant system privilege with admin option
-resource "exasol_grant" "use_any_schema" {
-  grantee_name      = exasol_role.analyst.name
-  privilege_type    = "SYSTEM"
+resource "exasol_system_privilege" "use_any_schema" {
+  grantee           = exasol_role.analyst.name
   privilege         = "USE ANY SCHEMA"
   with_admin_option = true
 }
 
 # Grant CREATE TABLE system privilege
-resource "exasol_grant" "create_table" {
-  grantee_name   = exasol_role.analyst.name
-  privilege_type = "SYSTEM"
-  privilege      = "CREATE TABLE"
+resource "exasol_system_privilege" "create_table" {
+  grantee   = exasol_role.analyst.name
+  privilege = "CREATE TABLE"
+}
+
+# Grant IMPORT/EXPORT privileges for ETL
+resource "exasol_system_privilege" "import_priv" {
+  grantee   = exasol_role.analyst.name
+  privilege = "IMPORT"
+}
+
+resource "exasol_system_privilege" "export_priv" {
+  grantee   = exasol_role.analyst.name
+  privilege = "EXPORT"
 }
 
 # =============================================================================
@@ -84,30 +95,27 @@ resource "exasol_grant" "create_table" {
 # =============================================================================
 
 # Grant USAGE on a schema to a role
-resource "exasol_grant" "schema_usage" {
-  grantee_name   = exasol_role.analyst.name
-  privilege_type = "OBJECT"
-  privilege      = "USAGE"
-  object_type    = "SCHEMA"
-  object_name    = exasol_schema.example.name
+resource "exasol_object_privilege" "schema_usage" {
+  grantee     = exasol_role.analyst.name
+  privileges  = ["USAGE"]
+  object_type = "SCHEMA"
+  object_name = exasol_schema.example.name
 }
 
-# Grant CREATE TABLE on a schema
-resource "exasol_grant" "schema_create_table" {
-  grantee_name   = exasol_role.analyst.name
-  privilege_type = "OBJECT"
-  privilege      = "CREATE TABLE"
-  object_type    = "SCHEMA"
-  object_name    = exasol_schema.example.name
+# Grant multiple privileges on a schema
+resource "exasol_object_privilege" "schema_read_write" {
+  grantee     = exasol_role.analyst.name
+  privileges  = ["USAGE", "SELECT", "INSERT", "UPDATE", "DELETE"]
+  object_type = "SCHEMA"
+  object_name = exasol_schema.example.name
 }
 
 # Grant ALL privileges on a schema
-resource "exasol_grant" "schema_all" {
-  grantee_name   = "DBA_ROLE"
-  privilege_type = "OBJECT"
-  privilege      = "ALL"
-  object_type    = "SCHEMA"
-  object_name    = exasol_schema.example.name
+resource "exasol_object_privilege" "schema_all" {
+  grantee     = "DBA_ROLE"
+  privileges  = ["ALL"]
+  object_type = "SCHEMA"
+  object_name = exasol_schema.example.name
 }
 
 # =============================================================================
@@ -115,30 +123,27 @@ resource "exasol_grant" "schema_all" {
 # =============================================================================
 
 # Grant SELECT on a table
-resource "exasol_grant" "table_select" {
-  grantee_name   = exasol_role.analyst.name
-  privilege_type = "OBJECT"
-  privilege      = "SELECT"
-  object_type    = "TABLE"
-  object_name    = "ANALYTICS.SALES_DATA"
+resource "exasol_object_privilege" "table_select" {
+  grantee     = exasol_role.analyst.name
+  privileges  = ["SELECT"]
+  object_type = "TABLE"
+  object_name = "ANALYTICS.SALES_DATA"
 }
 
-# Grant INSERT and UPDATE on a table
-resource "exasol_grant" "table_insert" {
-  grantee_name   = "DATA_LOADER_ROLE"
-  privilege_type = "OBJECT"
-  privilege      = "INSERT"
-  object_type    = "TABLE"
-  object_name    = "ANALYTICS.SALES_DATA"
+# Grant multiple privileges on a table
+resource "exasol_object_privilege" "table_write" {
+  grantee     = "DATA_LOADER_ROLE"
+  privileges  = ["INSERT", "UPDATE", "DELETE"]
+  object_type = "TABLE"
+  object_name = "ANALYTICS.SALES_DATA"
 }
 
 # Grant ALL on a table
-resource "exasol_grant" "table_all" {
-  grantee_name   = "TABLE_OWNER"
-  privilege_type = "OBJECT"
-  privilege      = "ALL"
-  object_type    = "TABLE"
-  object_name    = "ANALYTICS.SALES_DATA"
+resource "exasol_object_privilege" "table_all" {
+  grantee     = "TABLE_OWNER"
+  privileges  = ["ALL"]
+  object_type = "TABLE"
+  object_name = "ANALYTICS.SALES_DATA"
 }
 
 # =============================================================================
@@ -146,10 +151,9 @@ resource "exasol_grant" "table_all" {
 # =============================================================================
 
 # Grant SELECT on a view
-resource "exasol_grant" "view_select" {
-  grantee_name   = exasol_role.analyst.name
-  privilege_type = "OBJECT"
-  privilege      = "SELECT"
-  object_type    = "VIEW"
-  object_name    = "ANALYTICS.SALES_SUMMARY"
+resource "exasol_object_privilege" "view_select" {
+  grantee     = exasol_role.analyst.name
+  privileges  = ["SELECT"]
+  object_type = "VIEW"
+  object_name = "ANALYTICS.SALES_SUMMARY"
 }

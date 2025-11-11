@@ -2,7 +2,7 @@ terraform {
   required_providers {
     exasol = {
       source  = "local/exasol/terraform-provider-exasol"
-      version = "0.2.0"
+      version = "~> 0.1.6"
     }
   }
 }
@@ -75,15 +75,15 @@ resource "exasol_system_privilege" "data_loader_create_schema" {
 # Grant USAGE on schema to a role
 resource "exasol_object_privilege" "analyst_schema_usage" {
   grantee     = exasol_role.analyst.name
-  privilege   = "USAGE"
+  privileges  = ["USAGE"]
   object_type = "SCHEMA"
   object_name = exasol_schema.analytics.name
 }
 
-# Grant CREATE TABLE on schema
-resource "exasol_object_privilege" "analyst_create_table_in_schema" {
+# Grant multiple privileges on schema
+resource "exasol_object_privilege" "analyst_schema_read_write" {
   grantee     = exasol_role.analyst.name
-  privilege   = "CREATE TABLE"
+  privileges  = ["USAGE", "SELECT", "INSERT", "UPDATE", "DELETE"]
   object_type = "SCHEMA"
   object_name = exasol_schema.analytics.name
 }
@@ -91,7 +91,7 @@ resource "exasol_object_privilege" "analyst_create_table_in_schema" {
 # Grant ALL privileges on schema
 resource "exasol_object_privilege" "data_loader_all_schema" {
   grantee     = exasol_role.data_loader.name
-  privilege   = "ALL"
+  privileges  = ["ALL"]
   object_type = "SCHEMA"
   object_name = exasol_schema.analytics.name
 }
@@ -99,7 +99,7 @@ resource "exasol_object_privilege" "data_loader_all_schema" {
 # Grant SELECT on a table
 resource "exasol_object_privilege" "analyst_select_sales" {
   grantee     = exasol_role.analyst.name
-  privilege   = "SELECT"
+  privileges  = ["SELECT"]
   object_type = "TABLE"
   object_name = "ANALYTICS.SALES_DATA"
 }
@@ -107,15 +107,15 @@ resource "exasol_object_privilege" "analyst_select_sales" {
 # Grant INSERT on a table
 resource "exasol_object_privilege" "data_loader_insert_sales" {
   grantee     = exasol_role.data_loader.name
-  privilege   = "INSERT"
+  privileges  = ["INSERT"]
   object_type = "TABLE"
   object_name = "ANALYTICS.SALES_DATA"
 }
 
-# Grant UPDATE on a table
-resource "exasol_object_privilege" "data_loader_update_sales" {
+# Grant multiple privileges on a table
+resource "exasol_object_privilege" "data_loader_write_sales" {
   grantee     = exasol_role.data_loader.name
-  privilege   = "UPDATE"
+  privileges  = ["UPDATE", "DELETE"]
   object_type = "TABLE"
   object_name = "ANALYTICS.SALES_DATA"
 }
@@ -123,7 +123,7 @@ resource "exasol_object_privilege" "data_loader_update_sales" {
 # Grant ALL on a view
 resource "exasol_object_privilege" "analyst_all_view" {
   grantee     = exasol_role.analyst.name
-  privilege   = "ALL"
+  privileges  = ["ALL"]
   object_type = "VIEW"
   object_name = "ANALYTICS.MONTHLY_SUMMARY"
 }
@@ -150,53 +150,3 @@ resource "exasol_role_grant" "data_loader_to_analyst" {
   role    = exasol_role.data_loader.name
   grantee = exasol_role.analyst.name
 }
-
-# =============================================================================
-# COMPARISON WITH OLD exasol_grant RESOURCE (LEGACY - DO NOT USE)
-# =============================================================================
-
-# Old way (confusing):
-# resource "exasol_grant" "old_system_priv" {
-#   grantee_name      = "ANALYST_ROLE"
-#   privilege_type    = "SYSTEM"
-#   privilege         = "CREATE SESSION"
-#   with_admin_option = false
-# }
-
-# New way (clear):
-# resource "exasol_system_privilege" "new_system_priv" {
-#   grantee   = "ANALYST_ROLE"
-#   privilege = "CREATE SESSION"
-# }
-
-# Old way (confusing):
-# resource "exasol_grant" "old_object_priv" {
-#   grantee_name   = "ANALYST_ROLE"
-#   privilege_type = "OBJECT"
-#   privilege      = "SELECT"
-#   object_type    = "TABLE"
-#   object_name    = "MYSCHEMA.MYTABLE"
-# }
-
-# New way (clear):
-# resource "exasol_object_privilege" "new_object_priv" {
-#   grantee     = "ANALYST_ROLE"
-#   privilege   = "SELECT"
-#   object_type = "TABLE"
-#   object_name = "MYSCHEMA.MYTABLE"
-# }
-
-# Old way (very confusing - object_type="ROLE" doesn't make sense):
-# resource "exasol_grant" "old_role_grant" {
-#   grantee_name      = "JOHN_DOE"
-#   privilege_type    = "SYSTEM"
-#   privilege         = "ANALYST_ROLE"
-#   object_type       = "ROLE"
-#   with_admin_option = false
-# }
-
-# New way (self-documenting):
-# resource "exasol_role_grant" "new_role_grant" {
-#   role    = "ANALYST_ROLE"
-#   grantee = "JOHN_DOE"
-# }
