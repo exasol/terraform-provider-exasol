@@ -120,7 +120,7 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	plan.ID = types.StringValue(upName)
-	plan.Name = types.StringValue(upName)
+	// Keep original name - don't uppercase it (Terraform expects consistency)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -208,7 +208,7 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 
 	plan.ID = types.StringValue(upNew)
-	plan.Name = types.StringValue(upNew)
+	// Keep original name - don't uppercase it (Terraform expects consistency)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
