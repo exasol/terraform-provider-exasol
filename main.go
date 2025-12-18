@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 )
 
-var version = "0.1.6"
+var version = "0.1.7"
 
 func main() {
 	var debug bool

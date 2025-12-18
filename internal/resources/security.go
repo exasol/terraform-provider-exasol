@@ -6,17 +6,12 @@ import (
 )
 
 // isValidIdentifier validates Exasol identifiers.
-// Exasol identifiers must start with a letter and contain only letters, digits, and underscores.
-// They are stored in uppercase in the database.
+// When using quoted identifiers (double quotes), Exasol allows any characters.
+// The only restriction is that the identifier must not be empty.
+// Double quotes within the identifier must be escaped by doubling them,
+// which is handled by escapeIdentifierLiteral().
 func isValidIdentifier(name string) bool {
-	if name == "" {
-		return false
-	}
-	// Exasol identifier pattern: must start with A-Z, followed by A-Z, 0-9, or _
-	// We check the uppercase version since Exasol stores identifiers in uppercase
-	upName := strings.ToUpper(name)
-	matched, _ := regexp.MatchString(`^[A-Z][A-Z0-9_]*$`, upName)
-	return matched
+	return name != ""
 }
 
 // sanitizeLogSQL redacts sensitive information (passwords) from SQL statements before logging.
@@ -30,7 +25,7 @@ func sanitizeLogSQL(sql string) string {
 }
 
 // escapeStringLiteral escapes single quotes in string literals for SQL.
-// In SQL, single quotes are escaped by doubling them: ' becomes ''
+// In SQL, single quotes are escaped by doubling them: ' becomes ”
 func escapeStringLiteral(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
 }

@@ -32,6 +32,7 @@ Gopkg.toml
 
 # Terraform state, plans, local override files and crash logs
 .terraform/
+.terraform.lock.hcl
 *.tfstate
 *.tfstate.*
 *.tfvars
